@@ -150,7 +150,7 @@ class CFGNode(Serializable):
         :return:    Generator yielding xrefs to this CFGNode's block.
         :rtype:     iter
         """
-        if not self._cfg_model.ident.startswith('CFGFast'):
+        if self._cfg_model.ident != 'CFGFast':
             raise ValueError("Memory data is currently only supported in CFGFast.")
         if not kb:
             kb = self._cfg_model.project.kb
