@@ -97,8 +97,8 @@ class CFGNode(Serializable):
             # We have to collect instruction addresses by ourselves
             if irsb is not None:
                 self.instruction_addrs = irsb.instruction_addresses
-
-        self.irsb = None
+        
+        #self.irsb = None
         self.soot_block = soot_block
         self.has_return = False
         self._hash = None
@@ -107,6 +107,11 @@ class CFGNode(Serializable):
         if self.block_id is None and type(self) is CFGNode:  # pylint: disable=unidiomatic-typecheck
             _l.warning("block_id is unspecified for %s. Default to its address %#x.", str(self), self.addr)
             self.block_id = self.addr
+        
+        if irsb is not None:
+            self.irsb = irsb
+        else:
+            self.irsb = self.block.vex if self.block is not None else None
 
     @property
     def name(self):
