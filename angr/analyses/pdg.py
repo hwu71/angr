@@ -29,6 +29,8 @@ class PDG(Analysis):
         self._graph = None
         
         # analysis output for Spider
+        self._directly_affected_nodes = None
+        self._indirectly_affected_nodes = None
         self._directly_affected_stmts = None
         self._indirectly_affected_stmts = None
         
@@ -71,10 +73,7 @@ class PDG(Analysis):
         """
         self._get_reachable_stmts(block_addrs)
         
-        directly_affected_stmts_info = [(node.block_addr, node.stmt_idx) for node in self._directly_affected_stmts]
-        indirectly_affected_stmts_info = [(node.block_addr, node.stmt_idx) for node in self._indirectly_affected_stmts]
-        
-        return directly_affected_stmts_info, indirectly_affected_stmts_info
+        return self._directly_affected_stmts, self._indirectly_affected_stmts
 
     #
     # Private methods
@@ -138,40 +137,57 @@ class PDG(Analysis):
         """
         graph = self._graph 
         
-        _directly_affected_stmts = []
+        # Find the directly/indirectly affected nodes 
+        _directly_affected_nodes = []
         for node in graph.nodes:
             if node.block_addr in block_addrs:
-                _directly_affected_stmts.append(node)
-        self._directly_affected_stmts = _directly_affected_stmts.copy()
+                _directly_affected_nodes.append(node)
+        self._directly_affected_nodes = _directly_affected_nodes.copy()
         
-        queue = _directly_affected_stmts
-        _indirectly_affected_stmts = []
+        queue = _directly_affected_nodes.copy()
+        _indirectly_affected_nodes = []
         
         while queue:
             src = queue.pop()
             for successor in graph.successors(src):
-                if successor not in self._directly_affected_stmts and \
-                    successor not in _indirectly_affected_stmts:
-                    _indirectly_affected_stmts.append(successor)
+                if successor not in self._directly_affected_nodes and \
+                    successor not in _indirectly_affected_nodes:
+                    _indirectly_affected_nodes.append(successor)
                     queue.append(successor)
         
+        self._indirectly_affected_nodes = _indirectly_affected_nodes
+        
+        # Update directly/indirectly_affected_stmts 
+        _directly_affected_stmts = []
+        _indirectly_affected_stmts = []
+        
+        for node in self._directly_affected_nodes:
+            
+            irsb = self.project.factory.block(addr=node.block_addr).vex
+            
+            # Strategy 1: Only returns the statement itself
+            #if irsb is not None and node.stmt_idx >= 0:
+            #    vex = irsb.statements[node.stmt_idx]
+            #    _directly_affected_stmts.append(vex)
+            
+            # Strategy 2: Returns the irsb followed by its stmt_idx
+            _directly_affected_stmts.append((irsb, node.stmt_idx))
+        
+        for node in self._indirectly_affected_nodes:
+            
+            irsb = self.project.factory.block(addr=node.block_addr).vex
+            
+            # Strategy 1: Only returns the statement itself
+            #if irsb is not None and node.stmt_idx >= 0:
+            #    vex = irsb.statements[node.stmt_idx]
+            #    _indirectly_affected_stmts.append(vex)
+            
+            # Strategy 2: Returns the irsb followed by its stmt_idx
+            _indirectly_affected_stmts.append((irsb, node.stmt_idx))
+        
+        self._directly_affected_stmts = _directly_affected_stmts
         self._indirectly_affected_stmts = _indirectly_affected_stmts
-        
-        
-
-    
-    def _get_directly_affected_stmts(self, block_addrs):
-        """
-        Get all the directly affected statements in the pdg graph with the 
-        block addresses.
-        
-        :param set block_addrs: The addresses of the target blocks.
-        :return: a list of directly affected stmt nodes 
-        :rtype: list 
-        """
-        return [node for node in self._graph.nodes if node.block_addr in block_addrs]
                 
-
     #
     # Graph operations
     #
