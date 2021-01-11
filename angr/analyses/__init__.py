@@ -7,6 +7,7 @@ def register_analysis(cls, name):
 from .cfg import CFGFast, CFGEmulated, CFG, CFGArchOptions, CFGFastSoot
 from .cdg import CDG
 from .ddg import DDG
+from .pdg import PDG
 from .vfg import VFG
 from .boyscout import BoyScout
 #from .girlscout import GirlScout
