@@ -115,8 +115,8 @@ class PDG(Analysis):
                 continue 
             
             src_block_addr = src.addr 
-            assert(len(src.irsb.exit_statements)==1)
-            _, src_exit_stmt_idx, _ = src.irsb.exit_statements[0]
+            
+            _, src_exit_stmt_idx, _ = src.irsb.exit_statements[-1]
 			
             dst_block_addr = dst.addr
 
