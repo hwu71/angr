@@ -1,7 +1,7 @@
 import logging
 
 import networkx
-
+import pyvex
 from . import Analysis
 
 from ..code_location import CodeLocation
@@ -22,6 +22,7 @@ class PDG(Analysis):
         :param start:		The starting point to begin constructing the program dependence graph
         """
         self._start = start if start is not None else self.project.entry
+        self._cfg = cdg._cfg.copy()
         self._cdg = cdg
         self._ddg = ddg 
 
@@ -74,7 +75,22 @@ class PDG(Analysis):
         self._get_reachable_stmts(block_addrs)
         
         return self._directly_affected_stmts, self._indirectly_affected_stmts
-
+    
+    
+    def get_reachable_code_locations(self, block_addrs):
+        """
+        Get all the reachble code location(including directly affected statements 
+        and indirectly affected statements) in the PDG graph with the block 
+        addresses.
+        
+        :param set block_addrs: The addresses of the target blocks.
+        :return: directly affected and indirectly affected CodeLocations
+        :rtype: list, list
+        """
+        self._get_reachable_code_locations(block_addrs)
+        
+        return self._directly_affected_nodes, self._indirectly_affected_nodes
+        
     #
     # Private methods
     #
@@ -90,19 +106,25 @@ class PDG(Analysis):
         self._graph = networkx.DiGraph()
 
         # 1. add all the stmt nodes into the graph
-
-        # we need to consider both the ddg_stmt graph and the ddg_data graph 
-        for node in self._ddg.graph.nodes:
-            if node not in self._graph:
-                self._graph_add_node(node)
-
-        for data_node in self._ddg.data_graph.nodes:
-            # type of 'data_node': angr.analyses.ddg.ProgramVariable
-            # type of 'node': angr.code_location.CodeLocation
-            node = data_node.location
-            if node not in self._graph:
-                self._graph_add_node(node)
-
+        for node in self._cfg.graph.nodes:
+            current_ins_addr = node.addr
+            for stmt_idx, stmt in enumerate(node.irsb.statements):
+                current_code_location = None
+                
+                if isinstance(stmt, pyvex.IRStmt.IMark):
+                    current_ins_addr = stmt.addr
+                    
+                    # When there is only one statement(IMark), add a empty code_location (as a placeholder) into the graph
+                    if(len(node.irsb.statements)-1 == stmt_idx):
+                        current_code_location = CodeLocation(block_addr=node.addr, stmt_idx=-2, ins_addr=current_ins_addr)
+                        self._graph_add_node(current_code_location)
+                        
+                    continue
+                
+                current_code_location = CodeLocation(block_addr=node.addr, stmt_idx=stmt_idx, ins_addr=current_ins_addr)
+                self._graph_add_node(current_code_location)
+                
+       
         # 2. add edges from ddg and cdg
 
         # 2.1 from the ddg stmt graph
@@ -126,6 +148,38 @@ class PDG(Analysis):
                 if(location.block_addr == dst_block_addr):
                     self._graph_add_edge(src_location, location, type='cd')
     
+    def _get_reachable_code_locations(self, block_addrs):
+        """
+        Get all the reachble code locations (including directly affected 
+        statements and indirectly affected statements) in the PDG graph 
+        with the block addresses.
+        
+        :param set block_addrs: The addresses of the target blocks.
+        :return: None       
+        """
+        graph = self._graph 
+        
+        # Find the directly/indirectly affected nodes 
+        _directly_affected_nodes = []
+        for node in graph.nodes:
+            if node.block_addr in block_addrs:
+                _directly_affected_nodes.append(node)
+        self._directly_affected_nodes = _directly_affected_nodes.copy()
+        
+        queue = _directly_affected_nodes.copy()
+        _indirectly_affected_nodes = []
+        
+        while queue:
+            src = queue.pop()
+            for successor in graph.successors(src):
+                if successor not in self._directly_affected_nodes and \
+                    successor not in _indirectly_affected_nodes:
+                    _indirectly_affected_nodes.append(successor)
+                    queue.append(successor)
+        
+        self._indirectly_affected_nodes = _indirectly_affected_nodes
+        
+        
     def _get_reachable_stmts(self, block_addrs):
         """
         Get all the reachble statements(including directly affected statements 
@@ -157,6 +211,7 @@ class PDG(Analysis):
         
         self._indirectly_affected_nodes = _indirectly_affected_nodes
         
+        
         # Update directly/indirectly_affected_stmts 
         _directly_affected_stmts = []
         _indirectly_affected_stmts = []
@@ -187,7 +242,7 @@ class PDG(Analysis):
         
         self._directly_affected_stmts = _directly_affected_stmts
         self._indirectly_affected_stmts = _indirectly_affected_stmts
-                
+        
     #
     # Graph operations
     #
